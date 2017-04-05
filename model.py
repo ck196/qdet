@@ -78,13 +78,15 @@ def inference(images,
                 net = fire_module(net, 64, 256, scope='fire9')
                 net = slim.max_pool2d(net, [1, 1], scope='maxpool9')
                 net = fire_module(net, 80, 512, scope='fire10')
-                logits = slim.fully_connected(net, num_classes + 4 * BOX_PER_CELL, scope='fully_connected')
+                net = slim.fully_connected(net, (num_classes + 4) * BOX_PER_CELL, scope='fully_connected')
+                logits = slim.flatten(net, scope="flatten")
+
                 logits = utils.collect_named_outputs(end_point_collection,
                                                      sc.name + '/logits',
                                                      logits)
             end_points = utils.convert_collection_to_dict(end_point_collection)
 
-    return logits[0][0][0]
+    return logits
 
 
 def loss(logits, labels):
