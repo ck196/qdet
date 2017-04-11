@@ -11,13 +11,10 @@ from tensorflow.contrib.framework import add_arg_scope
 from tensorflow.contrib.layers.python.layers import utils
 
 slim = tf.contrib.slim
-import numpy as np
-import cv2
 
-BATCH_SIZE = 10
-IMAGE_SIZE = 224
-BOX_PER_CELL = 2
+from settings import  *
 
+losses = slim.losses
 
 @add_arg_scope
 def fire_module(inputs,
@@ -78,7 +75,7 @@ def inference(images,
                 net = fire_module(net, 64, 256, scope='fire9')
                 net = slim.max_pool2d(net, [1, 1], scope='maxpool9')
                 net = fire_module(net, 80, 512, scope='fire10')
-                net = slim.fully_connected(net, (num_classes + 4) * BOX_PER_CELL, scope='fully_connected')
+                net = slim.fully_connected(net, BOX_PER_CELL * (num_classes + 4) , scope='fully_connected')
                 logits = slim.flatten(net, scope="flatten")
 
                 logits = utils.collect_named_outputs(end_point_collection,
@@ -86,11 +83,21 @@ def inference(images,
                                                      logits)
             end_points = utils.convert_collection_to_dict(end_point_collection)
 
-    return logits
+    return logits, end_points
 
 
-def loss(logits, labels):
-    pass
+def squeeze_loss(logits, labels):
+    new_logits = tf.reshape(logits, [-1, BATCH_SIZE, CELL, CELL, BOX_PER_CELL, NUM_CLASSES + 4])
+    new_lables = tf.reshape(labels, [-1, BATCH_SIZE, CELL, CELL, BOX_PER_CELL, NUM_CLASSES + 4])
+    class_predict = new_logits[:, :, :, :, :, :NUM_CLASSES]
+    bbox_predict = new_logits[:, :, :, :, :, -4:]
 
-def iou(box1, box2):
-    pass
+    class_gt = new_lables[:, :, :, :, :, :NUM_CLASSES]
+    bbox_gt = new_lables[:, :, :, :, :, -4:]
+
+    bbox_loss = slim.losses.mean_squared_error(bbox_gt, bbox_predict)
+    class_loss = slim.losses.softmax_cross_entropy(class_gt, class_predict)
+    tf.summary.scalar('losses/bbox_loss', bbox_loss)
+    tf.summary.scalar('losses/class_loss', class_loss)
+    total_loss = bbox_loss + class_loss
+    return total_loss
